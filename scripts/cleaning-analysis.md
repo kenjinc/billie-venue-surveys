@@ -1,0 +1,138 @@
+
+## packages
+
+``` r
+library(tidyverse)
+```
+
+    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+    ## ✔ dplyr     1.1.4     ✔ readr     2.1.5
+    ## ✔ forcats   1.0.0     ✔ stringr   1.5.1
+    ## ✔ ggplot2   3.5.1     ✔ tibble    3.2.1
+    ## ✔ lubridate 1.9.3     ✔ tidyr     1.3.1
+    ## ✔ purrr     1.0.2     
+    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+    ## ✖ dplyr::filter() masks stats::filter()
+    ## ✖ dplyr::lag()    masks stats::lag()
+    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+
+``` r
+library(scales) 
+```
+
+    ## 
+    ## Attaching package: 'scales'
+    ## 
+    ## The following object is masked from 'package:purrr':
+    ## 
+    ##     discard
+    ## 
+    ## The following object is masked from 'package:readr':
+    ## 
+    ##     col_factor
+
+``` r
+library(ggpubr)
+library(forcats)
+```
+
+## data
+
+``` r
+bok_survey_data <-read.csv("/Users/kenjinchang/github/billie-venue-surveys/data/bok-survey-data.csv")
+```
+
+## cleaning
+
+``` r
+bok_survey_data <- bok_survey_data %>%
+  mutate(pb_item_again=case_when(pb_item_again=="Yes"~1,
+                   pb_item_again=="No"~0)) %>%
+  mutate(satisfaction_rating=case_when(satisfaction_rating=="I did not try a plant-based menu item"~NA,
+                                       satisfaction_rating=="1 (Very unsatisfied)"~1,
+                                       satisfaction_rating=="2 (Unsatisfied)"~2,
+                                       satisfaction_rating=="3 (Neutral)"~3,
+                                       satisfaction_rating=="4 (Satisfied)"~4,
+                                       satisfaction_rating=="5 (Very Satisfied)"~5))
+```
+
+## analysis
+
+``` r
+bok_survey_data %>%
+  drop_na() %>%
+  filter(pb_item=="Yes"|pb_item=="No") %>%
+  group_by(pb_item) %>%
+  summarise(mean(satisfaction_rating))
+```
+
+    ## # A tibble: 2 × 2
+    ##   pb_item `mean(satisfaction_rating)`
+    ##   <chr>                         <dbl>
+    ## 1 No                             4.44
+    ## 2 Yes                            4.52
+
+``` r
+mean_satisfaction_rating_plot <- bok_survey_data %>%
+  drop_na() %>%
+  filter(pb_item=="Yes"|pb_item=="No") %>%
+  group_by(pb_item) %>%
+  summarise(mean_satisfaction_rating=mean(satisfaction_rating)) %>%
+  ggplot(aes(x=pb_item,y=mean_satisfaction_rating)) +
+  geom_col(fill="slateblue") +
+  scale_x_discrete(labels=c("No (n=55)","Yes (n=48)")) +
+  xlab("Tried Plant-Based Item") + 
+  ylab("Mean Satisfaction Rating") +
+  labs(title="Mean satisfaction rating between concertgoers who did and did not try a plant-based item",caption="N=103") +
+  theme(panel.grid=element_blank(),panel.background=element_rect(fill="white"),panel.border=element_rect(fill=NA),legend.title=element_text(size=10),legend.text=element_text(size=10),plot.title=element_text(size=10)) 
+mean_satisfaction_rating_plot
+```
+
+![](cleaning-analysis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+``` r
+bok_survey_data %>%
+  drop_na() %>%
+  filter(pb_item=="Yes"|pb_item=="No") %>%
+  group_by(pb_item) %>%
+  summarise(total_pb_item_again=sum(pb_item_again)) %>%
+  mutate(total_pb_item_not_again=case_when(pb_item=="No"~55-total_pb_item_again,
+                                            pb_item=="Yes"~48-total_pb_item_again)) %>%
+  pivot_longer(!pb_item,names_to="pb_item_again",values_to="count") 
+```
+
+    ## # A tibble: 4 × 3
+    ##   pb_item pb_item_again           count
+    ##   <chr>   <chr>                   <dbl>
+    ## 1 No      total_pb_item_again        43
+    ## 2 No      total_pb_item_not_again    12
+    ## 3 Yes     total_pb_item_again        44
+    ## 4 Yes     total_pb_item_not_again     4
+
+``` r
+total_pb_item_again_plot <- bok_survey_data %>%
+  drop_na() %>%
+  filter(pb_item=="Yes"|pb_item=="No") %>%
+  group_by(pb_item) %>%
+  summarise(total_pb_item_again=sum(pb_item_again)) %>%
+  mutate(total_pb_item_not_again=case_when(pb_item=="No"~55-total_pb_item_again,
+                                            pb_item=="Yes"~48-total_pb_item_again)) %>%
+  pivot_longer(!pb_item,names_to="pb_item_again",values_to="count") %>%
+  ggplot(aes(x=pb_item,y=count,fill=pb_item_again)) +
+  geom_col(position="fill") +
+  scale_fill_manual(values=c("slateblue","darkseagreen"),labels=c("Willing","Unwilling"),name="Willingness to Try a\nPlant-Based Item") +
+  xlab("Tried Plant-Based Item") + 
+  ylab("Proportion Willing to Try a Plant-Based Item") +
+  labs(title="Proportion of concertgoers who would try a plant-based item at a future show",caption="N=103") +
+  theme(panel.grid=element_blank(),panel.background=element_rect(fill="white"),panel.border=element_rect(fill=NA),legend.title=element_text(size=10),legend.text=element_text(size=10),plot.title=element_text(size=10)) 
+total_pb_item_again_plot
+```
+
+![](cleaning-analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+plot_array <- ggarrange(mean_satisfaction_rating_plot,total_pb_item_again_plot,
+          labels=c("A","B"),
+          ncol=2)
+ggsave(filename="plot_array.png",plot=plot_array,path="/Users/kenjinchang/github/billie-venue-surveys/figures",width=36,height=16,units="cm",dpi=150,limitsize=TRUE)
+```
